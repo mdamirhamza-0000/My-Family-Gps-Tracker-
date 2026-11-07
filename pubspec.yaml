@@ -20,6 +20,8 @@ dependencies:
   connectivity_plus: ^7.3.2
   another_telephony: ^0.4.1
   android_intent_plus: ^6.0.0
+  sim_subs:
+    path: packages/sim_subs
 
 dev_dependencies:
   flutter_test:

@@ -22,6 +22,8 @@ Family members ke liye simple location-sharing app (Flutter + Firebase), sirf An
   tabhi jawab deta hai jab uski sharing ON ho (ek number ko 2 minute me ek baar).
   Fetch karne wala sirf wahi jawab maanta hai jiski request usne 15 minute ke
   andar khud bheji ho. Dono phones me SIM + network signal chahiye.
+  Dual SIM phone me app har SMS **dono SIM se** bhejta hai (jis SIM me balance
+  hai wahi se SMS jata hai), sirf default SIM se nahi.
 - Notification hamesha dikhta hai jab tak sharing ON hai (Android ka rule hai,
   taaki jis insaan ki location ja rahi hai use hamesha pata rahe).
 

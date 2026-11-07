@@ -16,6 +16,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' hide ServiceStatus;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sim_subs/sim_subs.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -200,6 +201,25 @@ const Duration kSmsPendingFor = Duration(minutes: 15);
 /// Ek hi number ko do jawab ke beech kam se kam itna gap.
 const Duration kSmsReplyGap = Duration(minutes: 2);
 
+/// SMS har active SIM se bhejo (dual SIM me dono se). Android ko SIM na bataya
+/// jaaye to wo sirf phone ki default SMS SIM use karta hai — agar us SIM me
+/// balance na ho to SMS "Not sent" ho jata hai. Isliye har SIM ke
+/// subscription id se alag-alag bhejte hain; jis SIM me balance hai wahi se
+/// SMS jayega. SIM ids na mile (permission nahi) to default SIM se bhejta hai.
+Future<void> sendSmsAllSims(Telephony tel, String to, String message) async {
+  final ids = await SimSubs.activeSubscriptionIds();
+  var sent = false;
+  for (final id in ids) {
+    try {
+      await tel.sendSms(to: to, message: message, subscriptionId: id);
+      sent = true;
+    } catch (_) {}
+  }
+  if (!sent) {
+    await tel.sendSms(to: to, message: message);
+  }
+}
+
 /// Phone number family registry (numbers/<phone>) me hai ya nahi.
 Future<bool> isRegisteredNumber(String phone) async {
   try {
@@ -325,7 +345,7 @@ Future<void> _answerLocationRequest(
       '${mapsLink(lat, lng)}';
   try {
     final tel = background ? Telephony.backgroundInstance : Telephony.instance;
-    await tel.sendSms(to: from, message: msg);
+    await sendSmsAllSims(tel, from, msg);
     await logSms('$from ko aapki location SMS se bheji');
   } catch (_) {
     await logSms('$from ko location SMS nahi ja paya');
@@ -338,6 +358,11 @@ Future<void> _useLocationReply(
   final until = p.getInt('sms_pending_until') ?? 0;
   final now = DateTime.now().millisecondsSinceEpoch;
   if (now > until) {
+    // Dono SIM se bheji request ke do jawab aa sakte hain — dusra chupchaap chhod do.
+    try {
+      final r = jsonDecode(p.getString('sms_last_reply') ?? '{}') as Map;
+      if (r['phone'] == from && now - ((r['t'] as num?) ?? 0) < 120000) return;
+    } catch (_) {}
     await logSms('$from ka location SMS aaya, par aapne request nahi ki thi');
     return;
   }
@@ -415,10 +440,10 @@ Future<void> onStart(ServiceInstance service) async {
       if (!granted) return;
       for (final num in contacts) {
         try {
-          await telephony.sendSms(
-              to: num,
-              message:
-                  '$kAppName: internet band hai, ye meri GPS location hai: $link');
+          await sendSmsAllSims(
+              telephony,
+              num,
+              '$kAppName: internet band hai, ye meri GPS location hai: $link');
         } catch (_) {}
       }
     } catch (_) {}
@@ -847,7 +872,7 @@ class SetupScreen extends StatelessWidget {
     if (context.mounted) await _askAlways(context);
     await Permission.ignoreBatteryOptimizations.request();
     try {
-      await Telephony.instance.requestSmsPermissions;
+      await Telephony.instance.requestPhoneAndSmsPermissions;
     } catch (_) {}
     await startSmsListener();
     if (context.mounted) await _askOverlay(context);
@@ -1033,10 +1058,15 @@ class _FindScreenState extends State<FindScreen> {
     }
 
     try {
-      await Telephony.instance.sendSms(
-          to: phone,
-          message: '$kAppName: aap offline ho, aapki GPS location chahiye. '
-              '$kSmsReqTag');
+      // Dono SIM ki ids ke liye phone permission bhi chahiye.
+      await Telephony.instance.requestPhoneAndSmsPermissions;
+    } catch (_) {}
+    try {
+      await sendSmsAllSims(
+          Telephony.instance,
+          phone,
+          '$kAppName: aap offline ho, aapki GPS location chahiye. '
+          '$kSmsReqTag');
     } catch (_) {
       setState(() => _error = 'SMS nahi ja paya. SIM / balance check karo.');
       return;
@@ -1250,7 +1280,7 @@ class _FindScreenState extends State<FindScreen> {
   /// abhi kiska number SMS cache me hai, aur "Refresh" se turant update karo.
   Future<void> _showSmsContacts() async {
     try {
-      await Telephony.instance.requestSmsPermissions;
+      await Telephony.instance.requestPhoneAndSmsPermissions;
     } catch (_) {}
     await startSmsListener();
     var contacts = await loadSmsContactsCache();

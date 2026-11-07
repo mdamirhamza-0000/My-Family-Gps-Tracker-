@@ -1,0 +1,19 @@
+name: sim_subs
+description: Active SIM subscription ids (dual SIM) on Android, so SMS can be sent from every SIM.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.myfamily.sim_subs
+        pluginClass: SimSubsPlugin

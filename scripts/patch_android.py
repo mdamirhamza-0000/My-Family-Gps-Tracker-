@@ -64,6 +64,7 @@ perms = [
     "SEND_SMS",
     "RECEIVE_SMS",
     "READ_SMS",
+    "READ_PHONE_STATE",
     "SYSTEM_ALERT_WINDOW",
     "ACCESS_NETWORK_STATE",
 ]

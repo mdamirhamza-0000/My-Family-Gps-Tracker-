@@ -12,6 +12,16 @@ Family members ke liye simple location-sharing app (Flutter + Firebase), sirf An
 - Internet band ho to SMS se turant aakhri location bhej di jaati hai, family
   ke baaki registered numbers par — kuch manually dalna nahi padta, app
   khud apne family ke numbers jaan jaata hai.
+- **Offline member ki location (SMS request/reply):** agar jiski location fetch
+  kar rahe ho uska net band hai (location 3 minute se purani), to fetch karne
+  wale ka app us member ke number par apne aap SMS bhejta hai
+  ("aap offline ho, aapki GPS location chahiye"). Member ka phone ye SMS khud
+  padhta hai (app band ho tab bhi) aur apni GPS location SMS se wapas bhej deta
+  hai. Fetch karne wale ka app jawab padhte hi Google Maps apne aap khol deta hai.
+  Safety: member ka phone sirf family ke registered numbers ki request par aur
+  tabhi jawab deta hai jab uski sharing ON ho (ek number ko 2 minute me ek baar).
+  Fetch karne wala sirf wahi jawab maanta hai jiski request usne 15 minute ke
+  andar khud bheji ho. Dono phones me SIM + network signal chahiye.
 - Notification hamesha dikhta hai jab tak sharing ON hai (Android ka rule hai,
   taaki jis insaan ki location ja rahi hai use hamesha pata rahe).
 
@@ -31,7 +41,11 @@ Repo page > **Releases** > latest version > `app-release.apk` download karke ins
 ## Use kaise kare
 
 1. App kholo, apna number (ya do number) daalo, "Location share shuru karo" dabao.
-   Permission maange to sab Allow karo ("Allow all the time" bhi).
+   Permission maange to sab Allow karo ("Allow all the time", SMS, aur
+   "Display over other apps" bhi — ye SMS se location aane par Google Maps
+   apne aap kholne ke liye hai). Kuch phones (Xiaomi/Oppo/Vivo) me Settings >
+   Apps > is app > "Display pop-up windows while running in background" bhi
+   ON karna padta hai.
 2. Dusre ki location dekhni ho: naam (optional) aur unka number daalo, "Location
    fetch karo" dabao.
 3. Apna number badalna ho: hamburger menu (top-left) > "Mera number edit karo".

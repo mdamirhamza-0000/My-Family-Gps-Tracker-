@@ -2,7 +2,8 @@
 """Patch the freshly generated Flutter android/ folder:
 - Google services Gradle plugin
 - minSdk 23
-- location / background / notification / SMS permissions, geo: + https: queries
+- location / background / notification / SMS (send + receive) / overlay permissions,
+  geo: + https: queries
 - background location service (foregroundServiceType=location) + notification icon
 Every step is idempotent.
 """
@@ -61,6 +62,9 @@ perms = [
     "RECEIVE_BOOT_COMPLETED",
     "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     "SEND_SMS",
+    "RECEIVE_SMS",
+    "READ_SMS",
+    "SYSTEM_ALERT_WINDOW",
     "ACCESS_NETWORK_STATE",
 ]
 block = ""

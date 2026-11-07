@@ -1,0 +1,25 @@
+group = "com.myfamily.sim_subs"
+version = "1.0"
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+
+android {
+    namespace = "com.myfamily.sim_subs"
+    compileSdk = 34
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    defaultConfig {
+        minSdk = 23
+    }
+}

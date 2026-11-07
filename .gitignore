@@ -9,10 +9,10 @@ build/
 .vscode/
 
 # Generated at build time (see .github/workflows/build-apk.yml)
-android/
-ios/
+/android/
+/ios/
 
 # Android signing
-android/key.properties
+/android/key.properties
 *.jks
 *.keystore

@@ -4,8 +4,6 @@ import 'dart:io' show Platform;
 import 'dart:math';
 import 'dart:ui' show DartPluginRegistrant;
 
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:android_intent_plus/flag.dart';
 import 'package:another_telephony/telephony.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -179,7 +177,7 @@ Future<List<String>> loadSmsContactsCache() async {
 //  1. Fetch karne wala (A) number daalta hai. Agar us member (B) ki location
 //     kuch minute se purani hai (yaani B ka net band hai), A ka phone B ke
 //     number par apne aap SMS bhejta hai:  "... [FGT:REQ]"
-//  2. B ka phone ye SMS khud padhta hai (app band ho tab bhi) aur, agar
+//  2. B ka phone ye SMS khud padhta hai (native Android receiver, app band ho tab bhi) aur, agar
 //     B ki sharing ON hai aur SMS bhejne wala family registry ka number hai,
 //     apni GPS location SMS se wapas bhej deta hai:  "[FGT:LOC:lat,lng] ..."
 //  3. A ka phone ye jawab khud padhta hai aur Google Maps apne aap khol deta hai.
@@ -189,17 +187,11 @@ Future<List<String>> loadSmsContactsCache() async {
 // maanta hai jiski request usne pichhle 15 minute me khud bheji ho.
 
 const String kSmsReqTag = '[FGT:REQ]';
-final RegExp _smsLocRe =
-    RegExp(r'\[FGT:LOC:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]');
-
 /// Itni der se location update na aaye to member ko offline maana jaata hai.
 const Duration kOfflineAfter = Duration(minutes: 3);
 
 /// Request ke baad itni der tak jawab ka intezaar / maanna.
 const Duration kSmsPendingFor = Duration(minutes: 15);
-
-/// Ek hi number ko do jawab ke beech kam se kam itna gap.
-const Duration kSmsReplyGap = Duration(minutes: 2);
 
 /// SMS har active SIM se bhejo (dual SIM me dono se). Android ko SIM na bataya
 /// jaaye to wo sirf phone ki default SMS SIM use karta hai — agar us SIM me
@@ -255,141 +247,6 @@ Future<List<Map<String, dynamic>>> loadSmsLog() async {
   } catch (_) {
     return [];
   }
-}
-
-/// Official Google Maps app seedha khol do (foreground ya background dono se).
-/// Background se khulne ke liye "Display over other apps" permission chahiye.
-Future<void> openMapsNative(double lat, double lng) async {
-  if (!Platform.isAndroid) return;
-  try {
-    await AndroidIntent(
-      action: 'action_view',
-      data: 'geo:$lat,$lng?q=$lat,$lng',
-      package: 'com.google.android.apps.maps',
-      flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-    ).launch();
-    return;
-  } catch (_) {}
-  try {
-    await AndroidIntent(
-      action: 'action_view',
-      data: mapsLink(lat, lng),
-      flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
-    ).launch();
-  } catch (_) {}
-}
-
-/// Har aane wale SMS ke liye. Foreground aur background (app band) dono se.
-Future<void> handleIncomingSms(SmsMessage m, {required bool background}) async {
-  try {
-    final body = m.body ?? '';
-    final isReq = body.contains(kSmsReqTag);
-    final loc = _smsLocRe.firstMatch(body);
-    if (!isReq && loc == null) return; // hamara SMS nahi, chhod do
-
-    final from = normalizePhone(m.address ?? '');
-    if (from.length != 10) return;
-
-    final p = await SharedPreferences.getInstance();
-    await p.reload();
-
-    // Ek hi SMS do jagah se aaye to sirf ek baar chalao.
-    final key = '${m.date ?? 0}|$from|${body.hashCode}';
-    if (p.getString('sms_last_key') == key) return;
-    await p.setString('sms_last_key', key);
-
-    final family = await loadSmsContactsCache();
-    if (!family.contains(from)) {
-      await logSms('$from ka SMS ignore kiya (family registry me nahi)');
-      return;
-    }
-
-    if (isReq) {
-      await _answerLocationRequest(from, p, background);
-    } else if (loc != null) {
-      await _useLocationReply(
-          from, double.parse(loc.group(1)!), double.parse(loc.group(2)!), p);
-    }
-  } catch (_) {}
-}
-
-/// B ka phone: A ki request aayi -> apni GPS location SMS se wapas bhejo.
-Future<void> _answerLocationRequest(
-    String from, SharedPreferences p, bool background) async {
-  if (!(p.getBool('sharing_on') ?? false)) {
-    await logSms('$from ki request aayi, par aapki sharing OFF hai');
-    return;
-  }
-  final now = DateTime.now().millisecondsSinceEpoch;
-  final last = p.getInt('sms_reply_at_$from') ?? 0;
-  if (now - last < kSmsReplyGap.inMilliseconds) return;
-  await p.setInt('sms_reply_at_$from', now);
-
-  Position? pos;
-  try {
-    pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    ).timeout(const Duration(seconds: 25));
-  } catch (_) {
-    try {
-      pos = await Geolocator.getLastKnownPosition();
-    } catch (_) {}
-  }
-  if (pos == null) {
-    await logSms('$from ki request aayi, par GPS location nahi mili');
-    return;
-  }
-  final lat = double.parse(pos.latitude.toStringAsFixed(6));
-  final lng = double.parse(pos.longitude.toStringAsFixed(6));
-  final msg = '[FGT:LOC:$lat,$lng] $kAppName: meri GPS location '
-      '${mapsLink(lat, lng)}';
-  try {
-    final tel = background ? Telephony.backgroundInstance : Telephony.instance;
-    await sendSmsAllSims(tel, from, msg);
-    await logSms('$from ko aapki location SMS se bheji');
-  } catch (_) {
-    await logSms('$from ko location SMS nahi ja paya');
-  }
-}
-
-/// A ka phone: B ka jawab aaya -> Google Maps apne aap kholo.
-Future<void> _useLocationReply(
-    String from, double lat, double lng, SharedPreferences p) async {
-  final until = p.getInt('sms_pending_until') ?? 0;
-  final now = DateTime.now().millisecondsSinceEpoch;
-  if (now > until) {
-    // Dono SIM se bheji request ke do jawab aa sakte hain — dusra chupchaap chhod do.
-    try {
-      final r = jsonDecode(p.getString('sms_last_reply') ?? '{}') as Map;
-      if (r['phone'] == from && now - ((r['t'] as num?) ?? 0) < 120000) return;
-    } catch (_) {}
-    await logSms('$from ka location SMS aaya, par aapne request nahi ki thi');
-    return;
-  }
-  await p.setInt('sms_pending_until', 0);
-  await p.setString('sms_last_reply',
-      jsonEncode({'phone': from, 'lat': lat, 'lng': lng, 't': now}));
-  await logSms('$from ki location SMS se mili — Google Maps khul raha hai');
-  await openMapsNative(lat, lng);
-}
-
-/// App band hone par bhi aane wale SMS yahin aate hain (alag isolate).
-@pragma('vm:entry-point')
-Future<void> smsBackgroundHandler(SmsMessage message) async {
-  DartPluginRegistrant.ensureInitialized();
-  await handleIncomingSms(message, background: true);
-}
-
-/// SMS permission mile to incoming SMS sunna shuru karo (idempotent).
-Future<void> startSmsListener() async {
-  try {
-    if (!await Permission.sms.isGranted) return;
-    Telephony.instance.listenIncomingSms(
-      onNewMessage: (m) => handleIncomingSms(m, background: false),
-      onBackgroundMessage: smsBackgroundHandler,
-      listenInBackground: true,
-    );
-  } catch (_) {}
 }
 
 // ------------------------------------------------- BACKGROUND LOCATION SVC ----
@@ -564,7 +421,6 @@ Future<void> main() async {
   } catch (_) {}
 
   await configureService();
-  unawaited(startSmsListener());
 
   final numbers = await loadMyNumbers();
   if (numbers.isNotEmpty) {
@@ -884,7 +740,6 @@ class SetupScreen extends StatelessWidget {
     try {
       await Telephony.instance.requestPhoneAndSmsPermissions;
     } catch (_) {}
-    await startSmsListener();
     if (context.mounted) await _askOverlay(context);
 
     final numbers = [n1, if (n2.isNotEmpty) n2];
@@ -1020,7 +875,7 @@ class _FindScreenState extends State<FindScreen> {
   }
 
   /// Request SMS ke baad jawab aane tak intezaar. Jawab padhna aur Google Maps
-  /// kholna handleIncomingSms karta hai; yahan sirf screen ki status badalti hai.
+  /// kholna native receiver (SmsRequestReceiver.java) karta hai; yahan sirf screen ki status badalti hai.
   void _watchForReply(int sinceMs) {
     _replyTimer?.cancel();
     _replyTimer = Timer.periodic(const Duration(seconds: 2), (t) async {
@@ -1058,7 +913,6 @@ class _FindScreenState extends State<FindScreen> {
       if (sms.isPermanentlyDenied) await openAppSettings();
       return;
     }
-    await startSmsListener();
 
     final p = await SharedPreferences.getInstance();
     if (!(p.getBool('asked_overlay') ?? false) &&
@@ -1292,7 +1146,6 @@ class _FindScreenState extends State<FindScreen> {
     try {
       await Telephony.instance.requestPhoneAndSmsPermissions;
     } catch (_) {}
-    await startSmsListener();
     var contacts = await loadSmsContactsCache();
     final smsLog = await loadSmsLog();
     if (!mounted) return;

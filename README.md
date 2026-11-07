@@ -16,7 +16,7 @@ Family members ke liye simple location-sharing app (Flutter + Firebase), sirf An
   kar rahe ho uska net band hai (location 3 minute se purani), to fetch karne
   wale ka app us member ke number par apne aap SMS bhejta hai
   ("aap offline ho, aapki GPS location chahiye"). Member ka phone ye SMS khud
-  padhta hai (app band ho tab bhi) aur apni GPS location SMS se wapas bhej deta
+  padhta hai (native Android receiver, app band ho tab bhi) aur apni GPS location SMS se wapas bhej deta
   hai. Fetch karne wale ka app jawab padhte hi Google Maps apne aap khol deta hai.
   Safety: member ka phone sirf family ke registered numbers ki request par aur
   tabhi jawab deta hai jab uski sharing ON ho (ek number ko 2 minute me ek baar).

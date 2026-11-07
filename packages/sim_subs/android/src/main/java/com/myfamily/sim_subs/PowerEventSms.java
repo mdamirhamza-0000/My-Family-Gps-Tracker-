@@ -121,7 +121,7 @@ public final class PowerEventSms extends BroadcastReceiver {
 
     /** Dual SIM me dono SIM ke SmsManager; na mile to default. */
     @SuppressWarnings({"deprecation", "MissingPermission"})
-    private static List<SmsManager> activeSmsManagers(Context context) {
+    static List<SmsManager> activeSmsManagers(Context context) {
         List<SmsManager> managers = new ArrayList<>();
         try {
             SubscriptionManager sm = (SubscriptionManager)
@@ -141,7 +141,7 @@ public final class PowerEventSms extends BroadcastReceiver {
 
     /** Service ka saved fix aur phone ki last-known location me se jo naya ho. */
     @SuppressWarnings("MissingPermission")
-    private static double[] bestFix(Context context, SharedPreferences sp) {
+    static double[] bestFix(Context context, SharedPreferences sp) {
         double[] best = null;
         try {
             String raw = sp.getString("flutter.last_fix", null);

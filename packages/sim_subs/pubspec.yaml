@@ -1,5 +1,5 @@
 name: sim_subs
-description: Active SIM subscription ids (dual SIM) on Android, so SMS can be sent from every SIM.
+description: Android helpers - active SIM subscription ids (dual SIM) and an SMS with the last GPS fix when the phone shuts down or enters airplane mode.
 version: 0.0.1
 publish_to: none
 

@@ -20,6 +20,8 @@ public class SimSubsPlugin implements FlutterPlugin, MethodChannel.MethodCallHan
     @Override
     public void onAttachedToEngine(FlutterPluginBinding binding) {
         context = binding.getApplicationContext();
+        // Switch off / Airplane mode se pehle GPS SMS (process me ek hi baar register hota hai).
+        PowerEventSms.register(context);
         channel = new MethodChannel(binding.getBinaryMessenger(), "sim_subs");
         channel.setMethodCallHandler(this);
     }

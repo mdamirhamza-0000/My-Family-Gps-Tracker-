@@ -473,6 +473,12 @@ Future<void> onStart(ServiceInstance service) async {
       ),
     ).listen(
       (pos) async {
+        // Pehle phone me save karo (Firestore offline me atak sakta hai): isi
+        // aakhri fix ko phone band / Airplane mode se pehle SMS me bheja jata hai.
+        try {
+          await prefs.setString('last_fix',
+              '${pos.latitude},${pos.longitude},${DateTime.now().millisecondsSinceEpoch}');
+        } catch (_) {}
         try {
           await _membersCol(memberId).set({
             'lat': pos.latitude,
@@ -627,6 +633,10 @@ class _InstructionsScreenState extends State<InstructionsScreen> {
         'Android isse background me band kar sakta hai.',
     'Internet band ho jaaye to app SMS se bhi aakhri location bhej sakta '
         'hai. Family ke numbers app apne aap jaan leta hai, kuch daalna nahi.',
+    'Phone switch off / restart hone se theek pehle, ya Airplane mode ON '
+        'karte hi, app family ke numbers ko apni aakhri GPS location SMS se '
+        'bhej deta hai (sirf jab sharing ON ho). Airplane mode me SMS tab '
+        'jayega jab network turant band na ho — pakka nahi hai.',
     'Agar kisi member ka internet band ho aur aap unki location fetch karo, '
         'to aapka app unhe SMS bhejta hai. Unka phone (sirf jab unki sharing '
         'ON ho aur SMS family ke registered number se aaye) wo SMS khud padh '

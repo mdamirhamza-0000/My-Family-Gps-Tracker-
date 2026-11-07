@@ -24,6 +24,15 @@ Family members ke liye simple location-sharing app (Flutter + Firebase), sirf An
   andar khud bheji ho. Dono phones me SIM + network signal chahiye.
   Dual SIM phone me app har SMS **dono SIM se** bhejta hai (jis SIM me balance
   hai wahi se SMS jata hai), sirf default SIM se nahi.
+- **Switch off / Airplane mode se pehle SMS:** jab phone band (switch off ya
+  restart) ho raha ho, ya Airplane mode ON ho, to app family ke numbers ko
+  apni aakhri GPS location SMS se bhej deta hai (sharing ON ho tabhi, dono SIM
+  se). Ye native Android code hai (`packages/sim_subs`, `PowerEventSms.java`)
+  jo `ACTION_SHUTDOWN` / `AIRPLANE_MODE_CHANGED` sunta hai. Limits: Android
+  band hone se *pehle* ka koi "will shutdown" signal nahi deta, sirf shutdown
+  shuru hone par kuch second milte hain; Airplane mode me radio turant band
+  ho sakta hai, isliye wahan SMS jana pakka nahi. Location app ke aakhri saved
+  GPS fix se aati hai (max ~1 minute purani), naya fix lene ka waqt nahi hota.
 - Notification hamesha dikhta hai jab tak sharing ON hai (Android ka rule hai,
   taaki jis insaan ki location ja rahi hai use hamesha pata rahe).
 

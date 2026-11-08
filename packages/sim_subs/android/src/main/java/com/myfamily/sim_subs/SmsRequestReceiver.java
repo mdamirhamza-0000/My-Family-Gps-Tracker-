@@ -147,9 +147,14 @@ public final class SmsRequestReceiver extends BroadcastReceiver {
         reply.put("lat", lat);
         reply.put("lng", lng);
         reply.put("t", now);
+        // Jis number ki location maangi thi (app ne "sms_pending_phone" me rakha) uske
+        // naam se save karo, taaki app me "SMS wali location" us member ke saath dikhe.
+        String target = sp.getString("flutter.sms_pending_phone", from);
+        if (target == null || target.length() != 10) target = from;
         sp.edit()
                 .putLong("flutter.sms_pending_until", 0)
                 .putString("flutter.sms_last_reply", reply.toString())
+                .putString("flutter.sms_loc_" + target, reply.toString())
                 .apply();
         log(sp, from + " ki location SMS se mili — Google Maps khul raha hai");
         openMaps(context, lat, lng);

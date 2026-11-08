@@ -38,6 +38,24 @@ String ago(DateTime t) {
   return '${d.inDays} din pehle';
 }
 
+/// "10:41 PM" (aaj ka) ya "07/11 10:41 PM" (purana).
+String clockTime(DateTime t) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final now = DateTime.now();
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  final ap = t.hour >= 12 ? 'PM' : 'AM';
+  final today = t.year == now.year && t.month == now.month && t.day == now.day;
+  return '${today ? '' : '${two(t.day)}/${two(t.month)} '}$h:${two(t.minute)} $ap';
+}
+
+/// Ek save hui location (lat, lng, kab ki).
+class _SavedLoc {
+  final double lat;
+  final double lng;
+  final DateTime? time;
+  const _SavedLoc(this.lat, this.lng, this.time);
+}
+
 String mapsLink(double lat, double lng) =>
     'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
 
@@ -862,8 +880,8 @@ class _FindScreenState extends State<FindScreen> {
   String? _info;
   bool _sharing = true;
   bool _waitingSms = false;
-  double? _lastLat;
-  double? _lastLng;
+  _SavedLoc? _netLoc; // Internet (Firebase) wali aakhri location
+  _SavedLoc? _smsLoc; // SMS se mili aakhri location
   Timer? _replyTimer;
   List<String> _myNumbers = [];
   List<Map<String, dynamic>> _history = [];
@@ -874,9 +892,50 @@ class _FindScreenState extends State<FindScreen> {
     _load();
   }
 
+  /// Is number se SMS se mili aakhri location (native receiver ne save ki).
+  Future<_SavedLoc?> _loadSmsLoc(String phone) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.reload();
+      final raw = p.getString('sms_loc_$phone');
+      if (raw == null) return null;
+      final r = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final t = (r['t'] as num?)?.toInt();
+      return _SavedLoc((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble(),
+          t == null ? null : DateTime.fromMillisecondsSinceEpoch(t));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Dono me se jo location naya ho: 'net', 'sms' ya null (time pata na ho to).
+  String? get _newestSource {
+    final a = _netLoc?.time;
+    final b = _smsLoc?.time;
+    if (a == null || b == null) return null;
+    return b.isAfter(a) ? 'sms' : 'net';
+  }
+
+  Widget _locRow(IconData icon, String label, _SavedLoc l, bool newest) {
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.teal),
+        title: Text(newest ? '$label (sabse nayi)' : label,
+            style: TextStyle(
+                fontWeight: newest ? FontWeight.bold : FontWeight.normal)),
+        subtitle: Text(l.time == null
+            ? 'Time pata nahi'
+            : '${ago(l.time!)} • ${clockTime(l.time!)}'),
+        trailing: const Icon(Icons.map_outlined),
+        onTap: () => _openGoogleMaps(l.lat, l.lng),
+      ),
+    );
+  }
+
   /// Request SMS ke baad jawab aane tak intezaar. Jawab padhna aur Google Maps
   /// kholna native receiver (SmsRequestReceiver.java) karta hai; yahan sirf screen ki status badalti hai.
-  void _watchForReply(int sinceMs) {
+  void _watchForReply(int sinceMs, String phone) {
     _replyTimer?.cancel();
     _replyTimer = Timer.periodic(const Duration(seconds: 2), (t) async {
       final p = await SharedPreferences.getInstance();
@@ -891,8 +950,10 @@ class _FindScreenState extends State<FindScreen> {
           kSmsPendingFor.inMilliseconds;
       if (gotReply || expired) {
         t.cancel();
+        final smsLoc = gotReply ? await _loadSmsLoc(phone) : null;
         if (!mounted) return;
         setState(() {
+          if (smsLoc != null) _smsLoc = smsLoc;
           _waitingSms = false;
           _error = null;
           _info = gotReply
@@ -938,6 +999,8 @@ class _FindScreenState extends State<FindScreen> {
     final now = DateTime.now().millisecondsSinceEpoch;
     await p.setInt(
         'sms_pending_until', now + kSmsPendingFor.inMilliseconds);
+    // Native receiver jawab ko isi number ke naam se "sms_loc_<phone>" me save karta hai.
+    await p.setString('sms_pending_phone', phone);
     await p.setString('last_search', phone);
     await _addHistory(phone, _nameCtrl.text.trim());
     await logSms('$phone ko location ki request SMS se bheji');
@@ -948,7 +1011,7 @@ class _FindScreenState extends State<FindScreen> {
       _info = 'Unka internet band lagta hai. Maine unhe SMS bhej diya hai. '
           'Unka phone jawab dete hi Google Maps apne aap khul jayega.';
     });
-    _watchForReply(now);
+    _watchForReply(now, phone);
   }
 
   Future<void> _load() async {
@@ -1075,13 +1138,14 @@ class _FindScreenState extends State<FindScreen> {
       final stale = updatedAt == null ||
           DateTime.now().difference(updatedAt) > kOfflineAfter;
       final gpsOff = d?['status'] == 'location_off';
-      if (d != null && d['lat'] != null) {
-        _lastLat = (d['lat'] as num).toDouble();
-        _lastLng = (d['lng'] as num).toDouble();
-      } else {
-        _lastLat = null;
-        _lastLng = null;
-      }
+      final smsLoc = await _loadSmsLoc(phone);
+      setState(() {
+        _smsLoc = smsLoc;
+        _netLoc = (d != null && d['lat'] != null)
+            ? _SavedLoc((d['lat'] as num).toDouble(), (d['lng'] as num).toDouble(),
+                updatedAt)
+            : null;
+      });
       if (stale && !gpsOff && !_myNumbers.contains(phone)) {
         final registered =
             (d != null && d['lat'] != null) || await isRegisteredNumber(phone);
@@ -1358,13 +1422,15 @@ class _FindScreenState extends State<FindScreen> {
             const SizedBox(height: 16),
             Text(_info!, textAlign: TextAlign.center),
           ],
-          if (_waitingSms && _lastLat != null && _lastLng != null) ...[
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () => _openGoogleMaps(_lastLat!, _lastLng!),
-              icon: const Icon(Icons.history),
-              label: const Text('Aakhri (purani) location Maps me dekho'),
-            ),
+          if (_netLoc != null || _smsLoc != null) ...[
+            const SizedBox(height: 16),
+            Text('Aakhri location', style: Theme.of(context).textTheme.titleMedium),
+            if (_netLoc != null)
+              _locRow(Icons.wifi, 'Internet wali location', _netLoc!,
+                  _newestSource == 'net'),
+            if (_smsLoc != null)
+              _locRow(Icons.sms_outlined, 'SMS wali location', _smsLoc!,
+                  _newestSource == 'sms'),
           ],
           if (_error != null) ...[
             const SizedBox(height: 16),
